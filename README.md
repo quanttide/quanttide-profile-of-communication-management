@@ -1,1 +1,1 @@
-# quanttide-profile-of-communication
+# quanttide-profile-of-communication-management
