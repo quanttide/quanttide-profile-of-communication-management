@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026-08-29 共识链</title>
+    <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.6/standalone/umd/vis-network.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; height: 100vh; display: flex; flex-direction: column; }
+        .header { background: #fff; padding: 16px 24px; border-bottom: 1px solid #e0e0e0; }
+        .header h1 { font-size: 18px; color: #333; }
+        .header p { font-size: 13px; color: #666; margin-top: 4px; }
+        .paths { background: #fff; padding: 10px 24px; border-bottom: 1px solid #e0e0e0; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .paths-label { font-size: 12px; color: #999; margin-right: 4px; }
+        .path-chip { font-size: 12px; color: #1565c0; background: #e3f2fd; border: 1px solid #bbdefb; border-radius: 14px; padding: 4px 12px; cursor: pointer; transition: background 0.2s; }
+        .path-chip:hover { background: #bbdefb; }
+        .path-chip.active { background: #1565c0; color: #fff; }
+        .main { flex: 1; display: flex; overflow: hidden; }
+        .graph-container { flex: 1; position: relative; background: #fff; }
+        #graph { width: 100%; height: 100%; }
+        .sidebar { width: 380px; background: #fff; border-left: 1px solid #e0e0e0; overflow-y: auto; padding: 20px; }
+        .detail-card { display: none; }
+        .detail-card.show { display: block; }
+        .detail-time { font-size: 12px; color: #999; margin-bottom: 8px; }
+        .detail-title { font-size: 16px; font-weight: 600; color: #333; margin-bottom: 12px; }
+        .detail-content { font-size: 14px; color: #555; line-height: 1.6; margin-bottom: 16px; padding: 12px; background: #f8f9fa; border-radius: 6px; border-left: 3px solid #1565c0; }
+        .detail-section { margin-top: 16px; padding-top: 16px; border-top: 1px dashed #e0e0e0; }
+        .detail-section-title { font-size: 14px; font-weight: 600; color: #333; margin-bottom: 12px; }
+        .related-item { padding: 10px 12px; margin-bottom: 8px; background: #f9f9f9; border-radius: 6px; cursor: pointer; transition: background 0.2s; }
+        .related-item:hover { background: #e3f2fd; }
+        .related-item .name { font-size: 14px; color: #333; margin-bottom: 4px; }
+        .related-item .time { font-size: 12px; color: #999; }
+        .related-item .rel { font-size: 11px; color: #1565c0; margin-bottom: 2px; }
+        .empty-state { text-align: center; padding: 60px 20px; color: #999; }
+        .legend { position: absolute; bottom: 20px; left: 20px; background: rgba(255,255,255,0.95); padding: 12px 16px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .legend-title { font-size: 12px; font-weight: 600; color: #666; margin-bottom: 8px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; color: #555; }
+        .legend-dot { width: 16px; height: 16px; border-radius: 4px; }
+        .legend-dot.root-mark { background: #1565c0; border: 2px dashed #f9a825; }
+        .legend-line { width: 30px; height: 2px; background: #666; position: relative; }
+        .legend-line::after { content: ''; position: absolute; right: 0; top: -4px; border: 4px solid transparent; border-left: 6px solid #666; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>2026-08-29 共识链 · 课题评审决策链</h1>
+        <p>点击卡片查看前因后果与关系类型；点击上方路径可高亮整条链（数据来源：consensus.json，已脱敏）</p>
+    </div>
+
+    <div class="paths">
+        <span class="paths-label">共识路径：</span>
+        <div id="pathList"></div>
+    </div>
+
+    <div class="main">
+        <div class="graph-container">
+            <div id="graph"></div>
+            <div class="legend">
+                <div class="legend-title">图例</div>
+                <div class="legend-item">
+                    <div class="legend-dot root-mark"></div>
+                    <span>起点节点（虚线边框）</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-line"></div>
+                    <span>箭头方向为关系方向，边上标注关系类型</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="detail-card show" id="emptyState">
+                <div class="empty-state">
+                    <p>👈 点击卡片查看详情</p>
+                    <p style="font-size: 12px; margin-top: 8px;">可查看共识描述、前因与后果</p>
+                </div>
+            </div>
+
+            <div class="detail-card" id="detailView">
+                <div class="detail-time" id="detailTime"></div>
+                <div class="detail-title" id="detailTitle"></div>
+                <div class="detail-content" id="detailContent"></div>
+                <div class="detail-section">
+                    <div class="detail-section-title">⬆ 前因</div>
+                    <div id="detailCauses"></div>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-title">⬇ 后果</div>
+                    <div id="detailEffects"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 数据来源：consensus.json（2026-08-29 共识链，已脱敏）
+        var graph = {
+  "id": "9a8b7c6d-0000-4f3e-8d2c-1a2b3c4d5e6f",
+  "name": "2026-08-29 课题评审决策链",
+  "description": "2026-08-29 CEO 办公室沟通形成的课题评审与激励决策链（已脱敏）",
+  "nodes": [
+    { "id": "a1b2c3d4-1111-4a2b-8c3d-4e5f6a7b8c9d", "title": "课题申请处理流程", "description": "实训基地课题申请的处理流程为先回复 issue，再将 issue 发到群里讲解。", "created_at": "2026-08-29T12:04:00+08:00", "updated_at": "2026-08-29T12:04:00+08:00" },
+    { "id": "a1b2c3d4-2222-4a2b-8c3d-4e5f6a7b8c9d", "title": "课题按《课题立项评审章程》双轴评审", "description": "课题申请按《课题立项评审章程》进行评审，评审按质量、速度（效率）双轴展开；评审实践同时检验章程本身的有效性。", "created_at": "2026-08-29T21:57:00+08:00", "updated_at": "2026-08-29T21:57:00+08:00" },
+    { "id": "a1b2c3d4-3333-4a2b-8c3d-4e5f6a7b8c9d", "title": "质量/速度双轴无法覆盖全部课题类型", "description": "评审中发现部分课题既不属于质量方向也不属于效率方向，而属于可发现性与可学习性问题，章程分类存在缺陷。", "created_at": "2026-08-29T21:59:00+08:00", "updated_at": "2026-08-29T21:59:00+08:00" },
+    { "id": "a1b2c3d4-4444-4a2b-8c3d-4e5f6a7b8c9d", "title": "章程 2.0 升级方向", "description": "新增可发现性与可学习性类别，优先级高于质量、高于数量；评审顺序为「首要问题与主要验收结果 > 核心目标 > 技术方案 > 关键词」。", "created_at": "2026-08-29T23:01:00+08:00", "updated_at": "2026-08-29T23:01:00+08:00" },
+    { "id": "a1b2c3d4-5555-4a2b-8c3d-4e5f6a7b8c9d", "title": "学员 A 课题评审通过", "description": "学员 A 课题按章程完成双轴评审，结论为通过；建议补充：覆盖率阈值须明确数值、实验结果与验收门槛应区分、人工确认环节增加核验标记。", "created_at": "2026-08-29T22:56:00+08:00", "updated_at": "2026-08-29T22:56:00+08:00" },
+    { "id": "a1b2c3d4-6666-4a2b-8c3d-4e5f6a7b8c9d", "title": "学员 B 课题不予通过", "description": "学员 B 课题方向正确但范围过小、偏保守，结论为不予通过。", "created_at": "2026-08-29T22:51:00+08:00", "updated_at": "2026-08-29T22:51:00+08:00" },
+    { "id": "a1b2c3d4-7777-4a2b-8c3d-4e5f6a7b8c9d", "title": "代金券激励方案确定", "description": "学员 A 课题申请奖励 500 代金券，作为首个通过者追加 500，合计 1000；学员 C 建议奖励 100，课题通过后再记 100；学员 A 账号立即发放，学员 C 待通过后发放。", "created_at": "2026-08-29T23:07:00+08:00", "updated_at": "2026-08-29T23:07:00+08:00" },
+    { "id": "a1b2c3d4-8888-4a2b-8c3d-4e5f6a7b8c9d", "title": "学员 A 接入实训基地部门", "description": "学员 A 发放实训基地账号，加入技术部门或产品部门；邀请方式为在管理后台生成邀请码发送给对方。", "created_at": "2026-08-29T23:08:00+08:00", "updated_at": "2026-08-29T23:08:00+08:00" },
+    { "id": "a1b2c3d4-9999-4a2b-8c3d-4e5f6a7b8c9d", "title": "章程交接秘书处", "description": "章程文档发至秘书处，由秘书处成员接手；助理下周一继续迭代章程。", "created_at": "2026-08-29T23:11:00+08:00", "updated_at": "2026-08-29T23:11:00+08:00" }
+  ],
+  "edges": [
+    { "id": "b2c3d4e5-1111-4b3c-9d4e-5f6a7b8c9d0e", "from": "a1b2c3d4-1111-4a2b-8c3d-4e5f6a7b8c9d", "to": "a1b2c3d4-2222-4a2b-8c3d-4e5f6a7b8c9d", "relation_type": "引出" },
+    { "id": "b2c3d4e5-2222-4b3c-9d4e-5f6a7b8c9d0e", "from": "a1b2c3d4-2222-4a2b-8c3d-4e5f6a7b8c9d", "to": "a1b2c3d4-3333-4a2b-8c3d-4e5f6a7b8c9d", "relation_type": "发现" },
+    { "id": "b2c3d4e5-3333-4b3c-9d4e-5f6a7b8c9d0e", "from": "a1b2c3d4-2222-4a2b-8c3d-4e5f6a7b8c9d", "to": "a1b2c3d4-5555-4a2b-8c3d-4e5f6a7b8c9d", "relation_type": "产出" },
+    { "id": "b2c3d4e5-4444-4b3c-9d4e-5f6a7b8c9d0e", "from": "a1b2c3d4-2222-4a2b-8c3d-4e5f6a7b8c9d", "to": "a1b2c3d4-6666-4a2b-8c3d-4e5f6a7b8c9d", "relation_type": "产出" },
+    { "id": "b2c3d4e5-5555-4b3c-9d4e-5f6a7b8c9d0e", "from": "a1b2c3d4-3333-4a2b-8c3d-4e5f6a7b8c9d", "to": "a1b2c3d4-4444-4a2b-8c3d-4e5f6a7b8c9d", "relation_type": "引致" },
+    { "id": "b2c3d4e5-6666-4b3c-9d4e-5f6a7b8c9d0e", "from": "a1b2c3d4-5555-4a2b-8c3d-4e5f6a7b8c9d", "to": "a1b2c3d4-7777-4a2b-8c3d-4e5f6a7b8c9d", "relation_type": "前置条件" },
+    { "id": "b2c3d4e5-7777-4b3c-9d4e-5f6a7b8c9d0e", "from": "a1b2c3d4-7777-4a2b-8c3d-4e5f6a7b8c9d", "to": "a1b2c3d4-8888-4a2b-8c3d-4e5f6a7b8c9d", "relation_type": "引致" },
+    { "id": "b2c3d4e5-8888-4b3c-9d4e-5f6a7b8c9d0e", "from": "a1b2c3d4-4444-4a2b-8c3d-4e5f6a7b8c9d", "to": "a1b2c3d4-9999-4a2b-8c3d-4e5f6a7b8c9d", "relation_type": "引致" }
+  ],
+  "created_at": "2026-08-29T23:50:00+08:00",
+  "updated_at": "2026-08-29T23:50:00+08:00"
+};
+
+        var nodeById = {};
+        graph.nodes.forEach(function (n) { nodeById[n.id] = n; });
+
+        // 邻接表
+        var incoming = {}, outgoing = {};
+        graph.edges.forEach(function (e) {
+            (incoming[e.to] = incoming[e.to] || []).push(e);
+            (outgoing[e.from] = outgoing[e.from] || []).push(e);
+        });
+
+        // 起点：无入边；终点：无出边
+        var roots = graph.nodes.filter(function (n) { return !incoming[n.id]; });
+        var leaves = graph.nodes.filter(function (n) { return !outgoing[n.id]; });
+
+        // 枚举根到叶的简单路径（DAG）
+        function findPaths() {
+            var paths = [];
+            function dfs(id, path) {
+                var nexts = (outgoing[id] || []).map(function (e) { return e.to; });
+                if (nexts.length === 0) { paths.push(path.slice()); return; }
+                nexts.forEach(function (nid) {
+                    if (path.indexOf(nid) === -1) { path.push(nid); dfs(nid, path); path.pop(); }
+                });
+            }
+            roots.forEach(function (r) { dfs(r.id, [r.id]); });
+            return paths;
+        }
+        var paths = findPaths();
+
+        // 路径条
+        var pathList = document.getElementById('pathList');
+        paths.forEach(function (p, idx) {
+            var chip = document.createElement('span');
+            chip.className = 'path-chip';
+            chip.textContent = '路径 ' + (idx + 1) + '：' + p.map(function (id) { return nodeById[id].title; }).join(' → ');
+            chip.onclick = function () {
+                document.querySelectorAll('.path-chip').forEach(function (c) { c.classList.remove('active'); });
+                chip.classList.add('active');
+                network.selectNodes(p);
+                network.fit({ nodes: p, animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
+                showDetail(nodeById[p[0]]);
+            };
+            pathList.appendChild(chip);
+        });
+
+        // 创建节点
+        var nodesArray = graph.nodes.map(function (n) {
+            var isRoot = !incoming[n.id];
+            return {
+                id: n.id,
+                label: n.title,
+                shape: 'box',
+                color: { background: '#1565c0', border: '#0d47a1' },
+                font: { color: '#fff', size: 13 },
+                margin: { top: 10, right: 15, bottom: 10, left: 15 },
+                borderWidth: isRoot ? 3 : 2,
+                borderWidthSelected: 3,
+                shapeProperties: { borderDashes: isRoot ? [5, 3] : false },
+                shadow: true
+            };
+        });
+
+        // 创建边（标注关系类型）
+        var edgesArray = graph.edges.map(function (e) {
+            return {
+                id: e.id,
+                from: e.from,
+                to: e.to,
+                label: e.relation_type,
+                arrows: 'to',
+                color: { color: '#666', highlight: '#333', hover: '#333' },
+                width: 2,
+                font: { size: 11, color: '#666', background: '#fff' },
+                smooth: { type: 'curvedCW', roundness: 0.15 }
+            };
+        });
+
+        // 初始化网络
+        var container = document.getElementById('graph');
+        var data = {
+            nodes: new vis.DataSet(nodesArray),
+            edges: new vis.DataSet(edgesArray)
+        };
+        var options = {
+            layout: {
+                hierarchical: {
+                    direction: 'LR',
+                    sortMethod: 'directed',
+                    levelSeparation: 250,
+                    nodeSpacing: 150
+                }
+            },
+            physics: { enabled: false },
+            interaction: { dragNodes: true, dragView: true, zoomView: true }
+        };
+        var network = new vis.Network(container, data, options);
+
+        // 点击事件
+        network.on('click', function (params) {
+            if (params.nodes.length > 0) {
+                showDetail(nodeById[params.nodes[0]]);
+            } else {
+                hideDetail();
+            }
+        });
+
+        function findNode(id) { return nodeById[id] || null; }
+
+        function showDetail(c) {
+            document.getElementById('detailTime').textContent = '创建时间：' + c.created_at;
+            document.getElementById('detailTitle').textContent = c.title;
+            document.getElementById('detailContent').textContent = c.description;
+
+            // 前因（入边）
+            var causesHtml = '';
+            var inc = incoming[c.id] || [];
+            inc.forEach(function (e) {
+                var item = findNode(e.from);
+                if (item) {
+                    causesHtml += '<div class="related-item" onclick="showDetailById(\'' + item.id + '\')">' +
+                        '<div class="rel">' + e.relation_type + '</div>' +
+                        '<div class="name">' + item.title + '</div>' +
+                        '<div class="time">' + item.created_at + '</div></div>';
+                }
+            });
+            document.getElementById('detailCauses').innerHTML =
+                causesHtml || '<p style="color:#999;font-size:13px;">无（起点节点）</p>';
+
+            // 后果（出边）
+            var effectsHtml = '';
+            var out = outgoing[c.id] || [];
+            out.forEach(function (e) {
+                var item = findNode(e.to);
+                if (item) {
+                    effectsHtml += '<div class="related-item" onclick="showDetailById(\'' + item.id + '\')">' +
+                        '<div class="rel">' + e.relation_type + '</div>' +
+                        '<div class="name">' + item.title + '</div>' +
+                        '<div class="time">' + item.created_at + '</div></div>';
+                }
+            });
+            document.getElementById('detailEffects').innerHTML =
+                effectsHtml || '<p style="color:#999;font-size:13px;">无（终点节点）</p>';
+
+            document.getElementById('emptyState').classList.remove('show');
+            document.getElementById('detailView').classList.add('show');
+            network.selectNodes([c.id]);
+        }
+
+        function hideDetail() {
+            document.getElementById('detailView').classList.remove('show');
+            document.getElementById('emptyState').classList.add('show');
+            network.unselectAll();
+        }
+
+        function showDetailById(id) {
+            var node = findNode(id);
+            if (node) {
+                showDetail(node);
+                network.focus(id, { scale: 1.2, animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
+            }
+        }
+    </script>
+</body>
+</html>
